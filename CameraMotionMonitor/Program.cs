@@ -17,13 +17,15 @@ class Program
             return;
         }
 
-        Mat frame = new Mat();
-        Mat previousFrame = new Mat();
+        Mat previousFrame = null;
+        
         Console.WriteLine("Monitoring for motion...");
 
         while (true)
         {
+            using Mat frame = new Mat();
             capture.Read(frame);
+            
             if (frame.Empty()) continue;
 
             // Convert to grayscale for motion detection
@@ -32,9 +34,9 @@ class Program
             // Apply a blur to reduce sensitivity to small movements
             Cv2.GaussianBlur(frame, frame, new OpenCvSharp.Size(21, 21), 0);
 
-            if (!previousFrame.Empty())
+            if (previousFrame != null && !previousFrame.Empty())
             {
-                Mat diff = new Mat();
+                using Mat diff = new Mat();
                 Cv2.Absdiff(previousFrame, frame, diff);
                 Cv2.Threshold(diff, diff, 25, 255, ThresholdTypes.Binary); // Filter out small changes
                 double motion = Cv2.Sum(diff).Val0;
@@ -44,10 +46,12 @@ class Program
                     Console.WriteLine("Motion detected! Flashing screen...");
                     await FlashBorders(Color.Red);
                 }
+                
+                // Dispose of the previous frame after processing
+                previousFrame.Dispose();
             }
 
             previousFrame = frame.Clone();
-            // Cv2.WaitKey(30);
             await Task.Delay(30);  
         }
     }
@@ -58,8 +62,6 @@ class Program
         {
             FlashFullScreen(Color.Red);
             await Task.Delay(200);  // Red for 200ms
-            // FlashFullScreen(Color.Black);
-            await Task.Delay(200);  // Back to normal for 200ms
         }
     }
     
