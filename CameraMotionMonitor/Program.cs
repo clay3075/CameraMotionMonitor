@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace CameraMotionMonitor;
 
 using System;
@@ -45,6 +47,7 @@ class Program
                 {
                     Console.WriteLine("Motion detected! Flashing screen...");
                     await FlashBorders(Color.Red);
+                    await ShowVideoFeedAsync(capture); 
                 }
                 
                 // Dispose of the previous frame after processing
@@ -84,13 +87,12 @@ class Program
             bottomBorder.Show();
             leftBorder.Show();
             rightBorder.Show();
-            Thread.Sleep(200);
+            Task.Delay(200).Wait();
 
             topBorder.Close();
             bottomBorder.Close();
             leftBorder.Close();
             rightBorder.Close();
-            // await Task.Delay(200);  // Hide borders for 200ms
         }
     }
 
@@ -125,5 +127,61 @@ class Program
         Application.DoEvents();  // Process UI events immediately
         Task.Delay(100).Wait();  // Small pause to ensure the flash shows
         flashForm.Close();
+    }
+    
+    static async Task ShowVideoFeedAsync(VideoCapture capture)
+    {
+        using Form videoFeedForm = new Form
+        {
+            FormBorderStyle = FormBorderStyle.None,
+            StartPosition = FormStartPosition.Manual,
+            Location = new System.Drawing.Point(10, 10),  // Top-left corner
+            Size = new System.Drawing.Size(320, 240),  // Small window size
+            TopMost = true,
+            ShowInTaskbar = false,
+            BackColor = Color.Black
+        };
+
+        using PictureBox videoFeedBox = new PictureBox
+        {
+            Dock = DockStyle.Fill,
+            SizeMode = PictureBoxSizeMode.StretchImage
+        };
+
+        videoFeedForm.Controls.Add(videoFeedBox);
+        videoFeedForm.Show();
+        
+        // Ensure the form is displayed before proceeding
+        Application.DoEvents();
+
+        Mat frame = new Mat();
+        Bitmap bitmap = null;
+
+        for (int i = 0; i < 50; i++)  // Display the video feed for ~5 seconds at 10 FPS
+        {
+            capture.Read(frame);
+            if (!frame.Empty())
+            {
+                // Convert Mat to Bitmap
+                bitmap?.Dispose();  // Dispose the previous bitmap
+                bitmap = OpenCvSharp.Extensions.BitmapConverter.ToBitmap(frame);
+
+                // Update the PictureBox on the UI thread
+                videoFeedBox.Invoke((MethodInvoker)(() =>
+                {
+                    videoFeedBox.Image?.Dispose();  // Dispose the previous image
+                    videoFeedBox.Image = bitmap;   // Assign the new frame
+                    Application.DoEvents();
+                }));
+            }
+
+            Task.Delay(100).Wait();  // 10 FPS
+        }
+
+        // Clean up
+        videoFeedForm.Hide();
+        videoFeedBox.Image?.Dispose();  // Dispose the last frame
+        bitmap?.Dispose();  // Dispose the final bitmap
+        frame.Dispose();  // Dispose Mat to free OpenCV resources
     }
 }
