@@ -32,9 +32,9 @@ class Program
 
             // Convert to grayscale for motion detection
             Cv2.CvtColor(frame, frame, ColorConversionCodes.BGR2GRAY);
-            
+
             // Apply a blur to reduce sensitivity to small movements
-            Cv2.GaussianBlur(frame, frame, new OpenCvSharp.Size(21, 21), 0);
+            Cv2.Blur(frame, frame, new OpenCvSharp.Size(9, 9));
 
             if (previousFrame != null && !previousFrame.Empty())
             {
@@ -55,7 +55,7 @@ class Program
             }
 
             previousFrame = frame.Clone();
-            await Task.Delay(30);  
+            await Task.Delay(30);
         }
     }
 
