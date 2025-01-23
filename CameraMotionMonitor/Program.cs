@@ -171,6 +171,8 @@ class Program
                 {
                     videoFeedBox.Image?.Dispose();  // Dispose the previous image
                     videoFeedBox.Image = bitmap;   // Assign the new frame
+                    videoFeedForm.TopMost = true;
+                    videoFeedForm.Refresh();
                     Application.DoEvents();
                 }));
             }
