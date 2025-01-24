@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-
 namespace CameraMotionMonitor;
 
 using System;
@@ -7,10 +5,68 @@ using System.Drawing;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using OpenCvSharp;
+using System.Linq;
 
 class Program
 {
-    static async Task Main()
+    private static NotifyIcon notifyIcon { get; set; }
+    private static bool isPaused = false;
+
+    [STAThread]
+    static void Main()
+    {
+        // Create a mutex to ensure only one instance of the application is running
+        using Mutex mutex = new Mutex(true, "{BB9C8B47-DB02-4039-8D9E-7111471BA67C}", out bool isNewInstance);
+        if (!isNewInstance)
+        {
+            // If the mutex is already acquired by another instance, notify the user and exit
+            MessageBox.Show("CameraMotionMonitor: The application is already running - check your notification area / system tray!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return; // Exit the application
+        }
+
+        // Initialize the application in STAThread mode (required for UI elements like NotifyIcon)
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
+
+        // notification area icon (tray)
+        notifyIcon = new NotifyIcon
+        {
+            Visible = true,
+            Text = "Camera Motion Monitor",
+            Icon = SystemIcons.Information  // Default system icon
+        };
+
+        // Create context menu for the system tray
+        ContextMenuStrip contextMenu = new();
+        ToolStripMenuItem pauseItem = new("Pause Monitoring");
+        ToolStripMenuItem exitItem = new("Exit");
+
+        // Hook up events for menu items
+        pauseItem.Click += (sender, e) =>
+        {
+            isPaused = !isPaused;
+            pauseItem.Text = isPaused ? "Resume Monitoring" : "Pause Monitoring";
+        };
+        exitItem.Click += (sender, e) =>
+        {
+            // Exit application
+            Application.Exit();
+        };
+
+        // Add items to context menu
+        contextMenu.Items.AddRange([pauseItem, exitItem]);
+
+        // Assign context menu to the NotifyIcon
+        notifyIcon.ContextMenuStrip = contextMenu;
+
+        // Start video capture in a separate task
+        Task.Run(() => StartVideoCapture(notifyIcon));
+
+        // Run the application to keep the tray icon active
+        Application.Run();
+    }
+
+    static async Task StartVideoCapture(NotifyIcon notifyIcon)
     {
         using var capture = new VideoCapture(1);  // Open default camera
         if (!capture.IsOpened())
@@ -19,42 +75,46 @@ class Program
             return;
         }
 
-        Mat previousFrame = null;
-        
+        Mat? previousFrame = null;
+
         Console.WriteLine("Monitoring for motion...");
 
         while (true)
         {
-            using Mat frame = new Mat();
-            capture.Read(frame);
-            
-            if (frame.Empty()) continue;
-
-            // Convert to grayscale for motion detection
-            Cv2.CvtColor(frame, frame, ColorConversionCodes.BGR2GRAY);
-
-            // Apply a blur to reduce sensitivity to small movements
-            Cv2.Blur(frame, frame, new OpenCvSharp.Size(9, 9));
-
-            if (previousFrame != null && !previousFrame.Empty())
+            if (!isPaused)
             {
-                using Mat diff = new Mat();
-                Cv2.Absdiff(previousFrame, frame, diff);
-                Cv2.Threshold(diff, diff, 25, 255, ThresholdTypes.Binary); // Filter out small changes
-                double motion = Cv2.Sum(diff).Val0;
+                using Mat frame = new Mat();
+                capture.Read(frame);
 
-                if (motion > 300000)  // Sensitivity threshold
+                if (frame.Empty()) continue;
+
+                // Convert to grayscale for motion detection
+                Cv2.CvtColor(frame, frame, ColorConversionCodes.BGR2GRAY);
+
+                // Apply a blur to reduce sensitivity to small movements
+                Cv2.Blur(frame, frame, new OpenCvSharp.Size(9, 9));
+
+                if (previousFrame != null && !previousFrame.Empty())
                 {
-                    Console.WriteLine("Motion detected! Flashing screen...");
-                    await FlashBorders(Color.Red);
-                    await ShowVideoFeedAsync(capture); 
+                    using Mat diff = new Mat();
+                    Cv2.Absdiff(previousFrame, frame, diff);
+                    Cv2.Threshold(diff, diff, 25, 255, ThresholdTypes.Binary); // Filter out small changes
+                    double motion = Cv2.Sum(diff).Val0;
+
+                    if (motion > 300000)  // Sensitivity threshold
+                    {
+                        Console.WriteLine("Motion detected! Flashing screen...");
+                        await FlashBorders(Color.Red);
+                        await ShowVideoFeedAsync(capture);
+                    }
+
+                    // Dispose of the previous frame after processing
+                    previousFrame.Dispose();
                 }
-                
-                // Dispose of the previous frame after processing
-                previousFrame.Dispose();
+
+                previousFrame = frame.Clone();
             }
 
-            previousFrame = frame.Clone();
             await Task.Delay(30);
         }
     }
@@ -67,7 +127,7 @@ class Program
             await Task.Delay(200);  // Red for 200ms
         }
     }
-    
+
     static async Task FlashBorders(Color color)
     {
         var borderWidth = 40;  // Width of the red border
@@ -81,7 +141,7 @@ class Program
         using var rightBorder = CreateBorderForm(screenWidth - borderWidth, 0, borderWidth, screenHeight, color);
 
         // Show borders and flash
-        for (int i = 0; i < 1; i++) 
+        for (int i = 0; i < 1; i++)
         {
             topBorder.Show();
             bottomBorder.Show();
@@ -128,7 +188,7 @@ class Program
         Task.Delay(100).Wait();  // Small pause to ensure the flash shows
         flashForm.Close();
     }
-    
+
     static async Task ShowVideoFeedAsync(VideoCapture capture)
     {
         using Form videoFeedForm = new Form
@@ -150,7 +210,7 @@ class Program
 
         videoFeedForm.Controls.Add(videoFeedBox);
         videoFeedForm.Show();
-        
+
         // Ensure the form is displayed before proceeding
         Application.DoEvents();
 
