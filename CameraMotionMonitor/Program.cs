@@ -16,7 +16,7 @@ class Program
     static void Main()
     {
         // Create a mutex to ensure only one instance of the application is running
-        using Mutex mutex = new Mutex(true, "{BB9C8B47-DB02-4039-8D9E-7111471BA67C}", out bool isNewInstance);
+        using Mutex mutex = new(true, "{BB9C8B47-DB02-4039-8D9E-7111471BA67C}", out bool isNewInstance);
         if (!isNewInstance)
         {
             // If the mutex is already acquired by another instance, notify the user and exit
@@ -118,6 +118,10 @@ class Program
                         Console.WriteLine("Motion detected! Flashing screen...");
                         await FlashBorders(Color.Red);
                         await ShowVideoFeedAsync(capture);
+
+                        previousFrame.Dispose();
+                        previousFrame = null;
+                        continue;
                     }
 
                     // Dispose of the previous frame after processing
@@ -215,9 +219,9 @@ class Program
         Application.DoEvents();
 
         Mat frame = new Mat();
-        Bitmap bitmap = null;
+        Bitmap? bitmap = null;
 
-        for (int i = 0; i < 50; i++)  // Display the video feed for ~5 seconds at 10 FPS
+        for (int i = 0; i < 100; i++)  // Display the video feed for ~5 seconds at 20 FPS
         {
             capture.Read(frame);
             if (!frame.Empty())
@@ -237,7 +241,7 @@ class Program
                 }));
             }
 
-            Task.Delay(100).Wait();  // 10 FPS
+            Task.Delay(50).Wait();  // 20 FPS
         }
 
         // Clean up
