@@ -1,16 +1,16 @@
-namespace CameraMotionMonitor;
-
-using System;
-using System.Drawing;
-using System.Threading.Tasks;
-using System.Windows.Forms;
+using System.Text.Json;
 using OpenCvSharp;
-using System.Linq;
+using Point = System.Drawing.Point;
+using Size = System.Drawing.Size;
 
 class Program
 {
     private static NotifyIcon notifyIcon { get; set; }
     private static bool isPaused = false;
+
+    // Global position variables
+    public static int globalX = 100; // Default starting position
+    public static int globalY = 100;
 
     [STAThread]
     static void Main()
@@ -23,6 +23,9 @@ class Program
             MessageBox.Show("CameraMotionMonitor: The application is already running - check your notification area / system tray!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return; // Exit the application
         }
+
+        // Load position from the configuration file when the app starts
+        LoadPosition();
 
         // Initialize the application in STAThread mode (required for UI elements like NotifyIcon)
         Application.EnableVisualStyles();
@@ -39,6 +42,7 @@ class Program
         // Create context menu for the system tray
         ContextMenuStrip contextMenu = new();
         ToolStripMenuItem pauseItem = new("Pause Monitoring");
+        ToolStripMenuItem changePositionItem = new("Change Position");
         ToolStripMenuItem exitItem = new("Exit");
 
         // Hook up events for menu items
@@ -47,6 +51,14 @@ class Program
             isPaused = !isPaused;
             pauseItem.Text = isPaused ? "Resume Monitoring" : "Pause Monitoring";
         };
+
+        changePositionItem.Click += (sender, e) =>
+        {
+            // Show the form to change the position
+            var changePositionForm = new ChangePositionForm();
+            changePositionForm.ShowDialog();
+        };
+
         exitItem.Click += (sender, e) =>
         {
             // Exit application
@@ -54,7 +66,7 @@ class Program
         };
 
         // Add items to context menu
-        contextMenu.Items.AddRange([pauseItem, exitItem]);
+        contextMenu.Items.AddRange(new ToolStripItem[] { pauseItem, changePositionItem, exitItem });
 
         // Assign context menu to the NotifyIcon
         notifyIcon.ContextMenuStrip = contextMenu;
@@ -119,15 +131,6 @@ class Program
         }
     }
 
-    static async Task FlashScreenRed()
-    {
-        for (int i = 0; i < 1; i++)  // Flash x times
-        {
-            FlashFullScreen(Color.Red);
-            await Task.Delay(200);  // Red for 200ms
-        }
-    }
-
     static async Task FlashBorders(Color color)
     {
         var borderWidth = 40;  // Width of the red border
@@ -141,19 +144,16 @@ class Program
         using var rightBorder = CreateBorderForm(screenWidth - borderWidth, 0, borderWidth, screenHeight, color);
 
         // Show borders and flash
-        for (int i = 0; i < 1; i++)
-        {
-            topBorder.Show();
-            bottomBorder.Show();
-            leftBorder.Show();
-            rightBorder.Show();
-            Task.Delay(200).Wait();
+        topBorder.Show();
+        bottomBorder.Show();
+        leftBorder.Show();
+        rightBorder.Show();
+        Task.Delay(200).Wait();
 
-            topBorder.Close();
-            bottomBorder.Close();
-            leftBorder.Close();
-            rightBorder.Close();
-        }
+        topBorder.Close();
+        bottomBorder.Close();
+        leftBorder.Close();
+        rightBorder.Close();
     }
 
     static Form CreateBorderForm(int x, int y, int width, int height, Color color)
@@ -195,7 +195,7 @@ class Program
         {
             FormBorderStyle = FormBorderStyle.None,
             StartPosition = FormStartPosition.Manual,
-            Location = new System.Drawing.Point(10, 10),  // Top-left corner
+            Location = new System.Drawing.Point(globalX, globalY),  // Configurable!
             Size = new System.Drawing.Size(320, 240),  // Small window size
             TopMost = true,
             ShowInTaskbar = false,
@@ -245,5 +245,112 @@ class Program
         videoFeedBox.Image?.Dispose();  // Dispose the last frame
         bitmap?.Dispose();  // Dispose the final bitmap
         frame.Dispose();  // Dispose Mat to free OpenCV resources
+    }
+
+    // Function to load position from a JSON file
+    static void LoadPosition()
+    {
+        string positionFile = "position.json";
+
+        if (File.Exists(positionFile))
+        {
+            // Read the position from the file
+            string json = File.ReadAllText(positionFile);
+            var position = JsonSerializer.Deserialize<Position>(json);
+            globalX = position.X;
+            globalY = position.Y;
+        }
+    }
+
+    // Function to save position to a JSON file
+    public static void SavePosition()
+    {
+        string positionFile = "position.json";
+
+        // Create a position object
+        var position = new Position { X = globalX, Y = globalY };
+
+        // Serialize the position object to JSON and save it to the file
+        string json = JsonSerializer.Serialize(position);
+        File.WriteAllText(positionFile, json);
+    }
+
+    // Class for storing the position
+    public class Position
+    {
+        public int X { get; set; }
+        public int Y { get; set; }
+    }
+}
+
+class ChangePositionForm : Form
+{
+    private Button btnUsePosition;
+    private bool isDragging = false;
+    private Point lastCursor;
+
+    public ChangePositionForm()
+    {
+        // Set form size and properties
+        this.Size = new Size(320, 240);
+        this.Text = "Change Position";
+        this.FormBorderStyle = FormBorderStyle.FixedDialog;
+        this.StartPosition = FormStartPosition.Manual;
+        this.Location = new Point(Program.globalX, Program.globalY);  // Load the current position
+
+        // Button to use the new position
+        btnUsePosition = new Button()
+        {
+            Text = "Use This Position",
+            Location = new Point(100, 60),
+            Size = new Size(120, 30)
+        };
+        btnUsePosition.Click += BtnUsePosition_Click;
+        this.Controls.Add(btnUsePosition);
+
+        // Handle the mouse events for dragging
+        this.MouseDown += ChangePositionForm_MouseDown;
+        this.MouseMove += ChangePositionForm_MouseMove;
+        this.MouseUp += ChangePositionForm_MouseUp;
+    }
+
+    private void BtnUsePosition_Click(object sender, EventArgs e)
+    {
+        // Update the global X and Y values with the current position of the form's top-left corner
+        Program.globalX = this.Location.X;
+        Program.globalY = this.Location.Y;
+
+        // Save the position to the file for persistence
+        Program.SavePosition();
+
+        MessageBox.Show($"Position updated: X={Program.globalX}, Y={Program.globalY}");
+        this.Close();  // Close the form after updating the position
+    }
+
+    private void ChangePositionForm_MouseDown(object sender, MouseEventArgs e)
+    {
+        if (e.Button == MouseButtons.Left)
+        {
+            isDragging = true;
+            lastCursor = e.Location;
+        }
+    }
+
+    private void ChangePositionForm_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (isDragging)
+        {
+            var deltaX = e.X - lastCursor.X;
+            var deltaY = e.Y - lastCursor.Y;
+            this.Location = new Point(this.Left + deltaX, this.Top + deltaY);
+        }
+    }
+
+    private void ChangePositionForm_MouseUp(object sender, MouseEventArgs e)
+    {
+        if (e.Button == MouseButtons.Left)
+        {
+            isDragging = false;
+        }
     }
 }
