@@ -3,7 +3,4 @@ obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
-/.vs/CameraMotionMonitor/v17
-/.vs/CameraMotionMonitor/FileContentIndex
-/.vs/CameraMotionMonitor/DesignTimeBuild/.dtbcache.v2
-/.vs/CameraMotionMonitor/DesignTimeBuild/.dtbcache.v2
+/.vs/

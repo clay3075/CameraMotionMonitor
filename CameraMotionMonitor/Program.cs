@@ -5,7 +5,7 @@ using Size = System.Drawing.Size;
 
 class Program
 {
-    private static NotifyIcon notifyIcon { get; set; }
+    private static NotifyIcon? MyNotifyIcon { get; set; }
     private static bool isPaused = false;
 
     // Global position variables
@@ -32,7 +32,7 @@ class Program
         Application.SetCompatibleTextRenderingDefault(false);
 
         // notification area icon (tray)
-        notifyIcon = new NotifyIcon
+        MyNotifyIcon = new NotifyIcon
         {
             Visible = true,
             Text = "Camera Motion Monitor",
@@ -66,19 +66,19 @@ class Program
         };
 
         // Add items to context menu
-        contextMenu.Items.AddRange(new ToolStripItem[] { pauseItem, changePositionItem, exitItem });
+        contextMenu.Items.AddRange([pauseItem, changePositionItem, exitItem]);
 
         // Assign context menu to the NotifyIcon
-        notifyIcon.ContextMenuStrip = contextMenu;
+        MyNotifyIcon.ContextMenuStrip = contextMenu;
 
         // Start video capture in a separate task
-        Task.Run(() => StartVideoCapture(notifyIcon));
+        Task.Run(() => StartVideoCapture());
 
         // Run the application to keep the tray icon active
         Application.Run();
     }
 
-    static async Task StartVideoCapture(NotifyIcon notifyIcon)
+    static async Task StartVideoCapture()
     {
         using var capture = new VideoCapture(1);  // Open default camera
         if (!capture.IsOpened())
@@ -95,7 +95,7 @@ class Program
         {
             if (!isPaused)
             {
-                using Mat frame = new Mat();
+                using Mat frame = new();
                 capture.Read(frame);
 
                 if (frame.Empty()) continue;
@@ -108,7 +108,7 @@ class Program
 
                 if (previousFrame != null && !previousFrame.Empty())
                 {
-                    using Mat diff = new Mat();
+                    using Mat diff = new();
                     Cv2.Absdiff(previousFrame, frame, diff);
                     Cv2.Threshold(diff, diff, 25, 255, ThresholdTypes.Binary); // Filter out small changes
                     double motion = Cv2.Sum(diff).Val0;
@@ -174,28 +174,9 @@ class Program
         };
     }
 
-    static void FlashFullScreen(Color color)
-    {
-        // Create a form that covers the entire screen
-        Form flashForm = new Form
-        {
-            FormBorderStyle = FormBorderStyle.None,
-            BackColor = color,
-            WindowState = FormWindowState.Maximized,
-            TopMost = true,
-            Opacity = 0.8  // Adjust opacity if needed
-        };
-
-        // Show flash effect and then close
-        flashForm.Show();
-        Application.DoEvents();  // Process UI events immediately
-        Task.Delay(100).Wait();  // Small pause to ensure the flash shows
-        flashForm.Close();
-    }
-
     static async Task ShowVideoFeedAsync(VideoCapture capture)
     {
-        using Form videoFeedForm = new Form
+        using Form videoFeedForm = new()
         {
             FormBorderStyle = FormBorderStyle.None,
             StartPosition = FormStartPosition.Manual,
@@ -206,7 +187,7 @@ class Program
             BackColor = Color.Black
         };
 
-        using PictureBox videoFeedBox = new PictureBox
+        using PictureBox videoFeedBox = new()
         {
             Dock = DockStyle.Fill,
             SizeMode = PictureBoxSizeMode.StretchImage
@@ -218,7 +199,7 @@ class Program
         // Ensure the form is displayed before proceeding
         Application.DoEvents();
 
-        Mat frame = new Mat();
+        Mat frame = new();
         Bitmap? bitmap = null;
 
         for (int i = 0; i < 100; i++)  // Display the video feed for ~5 seconds at 20 FPS
@@ -289,7 +270,7 @@ class Program
 
 class ChangePositionForm : Form
 {
-    private Button btnUsePosition;
+    private readonly Button btnUsePosition;
     private bool isDragging = false;
     private Point lastCursor;
 
